@@ -1,35 +1,70 @@
-import { useState } from "react";
+import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { fetchPosts, deletePost, updatePost } from "./api";
-import { PostDetail } from "./PostDetail";
+import { fetchPosts, deletePost, updatePost } from './api';
+import { PostDetail } from './PostDetail';
 const maxPostPage = 10;
 
 export function Posts() {
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedPost, setSelectedPost] = useState(null);
 
-  // replace with useQuery
-  const data = [];
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (currentPage >= maxPostPage) return;
+
+    const nextPage = currentPage + 1;
+
+    queryClient.prefetchQuery({
+      queryKey: ['posts', nextPage],
+      queryFn: () => fetchPosts(nextPage),
+      // Interessante adicionar um staleTime para evitar um novo refetch por de baixo dos panos quando
+      // o usário estiver percorrendo as páginas e clicar em next em intervalos menores que 5 segundos
+      staleTime: 5000,
+    });
+  }, [currentPage, queryClient]);
+
+  //* Diferença entre isLoaading e isFetching
+  // isFetching: A função assíncrona ainda não foi resolvida
+  // isLoading: isFetching E não há nenhum cache armazenado
+  const { data, isError, error, isLoading } = useQuery({
+    queryKey: ['posts', currentPage],
+    queryFn: () => fetchPosts(currentPage),
+    staleTime: 2000,
+  });
+
+  if (isLoading) return <h3>Loading</h3>;
+
+  if (isError)
+    return (
+      <>
+        <h3>Oops, something went wrong</h3>
+        <p>{error.toSting()}</p>
+      </>
+    );
 
   return (
     <>
       <ul>
         {data.map((post) => (
-          <li
-            key={post.id}
-            className="post-title"
-            onClick={() => setSelectedPost(post)}
-          >
+          <li key={post.id} className="post-title" onClick={() => setSelectedPost(post)}>
             {post.title}
           </li>
         ))}
       </ul>
       <div className="pages">
-        <button disabled onClick={() => {}}>
+        <button
+          disabled={currentPage <= 1}
+          onClick={() => setCurrentPage((previousValue) => previousValue - 1)}
+        >
           Previous page
         </button>
-        <span>Page {currentPage + 1}</span>
-        <button disabled onClick={() => {}}>
+        <span>Page {currentPage}</span>
+        <button
+          disabled={currentPage >= maxPostPage}
+          onClick={() => setCurrentPage((previousValue) => previousValue + 1)}
+        >
           Next page
         </button>
       </div>
